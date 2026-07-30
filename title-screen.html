@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>我与克俊华的校园爱情故事</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script src="pixi.min.js"></script>
+  <script>
+  try {
+
+  // ==================== 创建应用 ====================
+  const app = new PIXI.Application({
+    width: window.innerWidth,
+    height: window.innerHeight,
+    backgroundColor: 0x000000,
+    antialias: true,
+    resolution: Math.min(window.devicePixelRatio || 1, 2),
+    autoDensity: true,
+  });
+  document.body.appendChild(app.view);
+
+  // ==================== 加载设计图 ====================
+  const texture = PIXI.Texture.from("title-bg.png");
+  const bgSprite = new PIXI.Sprite(texture);
+  app.stage.addChild(bgSprite);
+
+  // 缩放适配屏幕（保持比例，填满）
+  function fitBackground() {
+    const W = app.screen.width;
+    const H = app.screen.height;
+    const texW = texture.width;
+    const texH = texture.height;
+    const scale = Math.max(W / texW, H / texH);
+    bgSprite.scale.set(scale);
+    bgSprite.x = (W - texW * scale) / 2;
+    bgSprite.y = (H - texH * scale) / 2;
+  }
+
+  // 等图片加载完再适配
+  if (texture.baseTexture.valid) {
+    fitBackground();
+  } else {
+    texture.baseTexture.once("loaded", fitBackground);
+  }
+
+  // ==================== 透明点击区 — START 按钮 ====================
+  // 根据你的设计图，START 按钮在右下区域
+  const startZone = new PIXI.Graphics();
+  startZone.beginFill(0xff0000, 0.01); // 几乎不可见
+  startZone.drawRoundedRect(0, 0, 200, 56, 28);
+  startZone.endFill();
+  startZone.eventMode = "static";
+  startZone.cursor = "pointer";
+  startZone.on("pointerover", () => { startZone.alpha = 0.3; });
+  startZone.on("pointerout", () => { startZone.alpha = 1; });
+  startZone.on("pointertap", () => { startGame(); });
+  startZone.on("pointerdown", () => { startGame(); });
+  app.stage.addChild(startZone);
+
+  // ==================== 布局 ====================
+  function layout() {
+    const W = app.screen.width;
+    const H = app.screen.height;
+    fitBackground();
+
+    // START 按钮热区 — 放在右下区域
+    startZone.x = W * 0.68;
+    startZone.y = H * 0.83;
+    // 根据屏幕大小调整按钮尺寸
+    startZone.width = Math.min(200, W * 0.2);
+    startZone.height = Math.min(56, H * 0.06);
+  }
+
+  // ==================== 开始游戏 ====================
+  function startGame() {
+    const fade = new PIXI.Graphics();
+    fade.beginFill(0x000000);
+    fade.drawRect(0, 0, app.screen.width, app.screen.height);
+    fade.endFill();
+    fade.alpha = 0;
+    app.stage.addChild(fade);
+
+    let t = 0;
+    const ticker = new PIXI.Ticker();
+    ticker.add(() => {
+      t++;
+      fade.alpha = Math.min(t / 40, 1);
+      if (t >= 40) {
+        ticker.destroy();
+        console.log("🎮 游戏开始！");
+      }
+    });
+    ticker.start();
+  }
+
+  // ==================== 窗口缩放 ====================
+  window.addEventListener("resize", () => {
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    layout();
+  });
+
+  // ==================== 启动 ====================
+  layout();
+  console.log("🌸 标题画面就绪！设计图: title-bg.png");
+  } catch(e) { console.error("初始化失败:", e); }
+  </script>
+</body>
+</html>

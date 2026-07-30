@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>PixiJS Test</title>
+<style>*{margin:0;padding:0} body{background:#000}</style>
+</head>
+<body>
+<script src="pixi.min.js"></script>
+<script>
+console.log("PIXI loaded:", typeof PIXI);
+
+const app = new PIXI.Application({
+  width: 800, height: 600,
+  backgroundColor: 0xff00ff,
+});
+document.body.appendChild(app.view);
+
+const text = new PIXI.Text("PIXI OK! 我与克俊华", {
+  fontSize: 40, fill: 0xffffff,
+  fontFamily: "Microsoft YaHei, sans-serif",
+});
+text.x = 100; text.y = 250;
+app.stage.addChild(text);
+
+console.log("Done! Canvas:", app.view.tagName);
+</script>
+</body>
+</html>

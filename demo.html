@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Galgame PixiJS Demo</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #000; touch-action: manipulation;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- PixiJS CDN -->
+  <!-- PixiJS — 国内用户用 bootcdn 更快 -->
+  <script src="https://cdn.bootcdn.net/ajax/libs/pixi.js/7.3.3/pixi.min.js"></script>
+  <script>
+    // 如果 bootcdn 没加载成功，换 jsdelivr
+    if (typeof PIXI === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/pixi.js@7.3.3/dist/pixi.min.js"><\/script>');
+    }
+  </script>
+
+  <script>
+  /* ============================================================
+      PixiJS Galgame Demo — 感受"不像网页"的视觉小说
+      点击画面推进对话，看到选项时点击按钮
+     ============================================================ */
+
+  (async () => {
+
+    // ---- 1. 创建 PixiJS 应用 ----
+    const app = new PIXI.Application({
+      resizeTo: window,         // 自动填满窗口
+      backgroundColor: 0x1a1a2e,
+      antialias: true,
+      resolution: window.devicePixelRatio || 1,
+      autoDensity: true,
+    });
+    document.body.appendChild(app.view);
+
+    // 游戏状态
+    let currentLine = 0;
+    let isTyping = false;
+    let gameStarted = false;
+
+    /* ---- 场景数据（硬编码 3 个场景做 Demo）---- */
+    const scenes = {
+      start: {
+        bg: 0xff9a9e,  // 夕阳渐变（简化用纯色）
+        lines: [
+          { speaker: "旁白", text: "夕阳洒在校门口的石板路上……" },
+          { speaker: "旁白", text: "你拖着行李箱，站在陌生的校园前。" },
+          { speaker: "???", text: "嘿——！你是新生吗？", sprite: "right" },
+        ],
+        choices: [
+          { text: "「是的！我叫小明！」热情回应", next: "happy" },
+          { text: "「啊……是的。」害羞点头", next: "shy" },
+        ]
+      },
+      happy: {
+        bg: 0xfecfef,
+        lines: [
+          { speaker: "克俊华", text: "真有精神！我叫克俊华，也是新生！", sprite: "right" },
+          { speaker: "克俊华", text: "刚才远远就看到你了，笑起来很好看。", sprite: "right" },
+          { speaker: "小明", text: "啊……谢、谢谢。（心跳加速）", sprite: "left" },
+          { speaker: "旁白", text: "开学第一天，你遇到了一个让你心动的人。" },
+        ],
+        choices: [],
+        next: "end"
+      },
+      shy: {
+        bg: 0xa1c4fd,
+        lines: [
+          { speaker: "克俊华", text: "不用紧张！我也是新生，很高兴认识你。", sprite: "right" },
+          { speaker: "克俊华", text: "一起去找礼堂吧？一个人也怪孤单的。", sprite: "right" },
+          { speaker: "小明", text: "（心里一暖）嗯，谢谢你。", sprite: "left" },
+          { speaker: "旁白", text: "开学第一天，有人陪你走完了第一段路。" },
+        ],
+        choices: [],
+        next: "end"
+      },
+      end: {
+        bg: 0xff6b6b,
+        lines: [
+          { speaker: "旁白", text: "══════════════" },
+          { speaker: "旁白", text: "《我与克俊华的校园爱情故事》" },
+          { speaker: "旁白", text: "Demo 完 · 感谢观看 🏳️‍🌈" },
+        ],
+        choices: [],
+        next: null
+      }
+    };
+
+    let currentScene = "start";
+    let currentLineIndex = 0;
+
+    /* ---- 2. 创建画面层级 ---- */
+
+    // 背景层（用渐变模拟）
+    const bgGraphics = new PIXI.Graphics();
+    app.stage.addChild(bgGraphics);
+
+    // 角色层
+    const charContainer = new PIXI.Container();
+    app.stage.addChild(charContainer);
+
+    // 对话框背景
+    const dialogueBg = new PIXI.Graphics();
+    const nameTagBg = new PIXI.Graphics();
+    app.stage.addChild(dialogueBg);
+    app.stage.addChild(nameTagBg);
+
+    // 名字文字
+    const nameText = new PIXI.Text("旁白", {
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 18, fontWeight: "bold", fill: 0xffffff,
+    });
+    nameText.visible = false;
+    app.stage.addChild(nameText);
+
+    // 对话文字
+    const dialogueText = new PIXI.Text("", {
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 20, fill: 0xf0e6d3,
+      wordWrap: true, wordWrapWidth: 0,  // 初始化后动态设置
+      lineHeight: 36,
+    });
+    app.stage.addChild(dialogueText);
+
+    // 点击提示
+    const clickHint = new PIXI.Text("▼", {
+      fontFamily: "sans-serif",
+      fontSize: 16, fill: 0xffffff, alpha: 0.5,
+    });
+    clickHint.anchor.set(1, 0);
+    app.stage.addChild(clickHint);
+
+    // 选项按钮容器
+    const choicesContainer = new PIXI.Container();
+    app.stage.addChild(choicesContainer);
+
+    // 标题画面文字
+    const titleText = new PIXI.Text("我与克俊华", {
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 52, fontWeight: "bold", fill: 0xffffff,
+      dropShadow: true, dropShadowColor: 0xe94560,
+      dropShadowBlur: 20, dropShadowDistance: 0,
+    });
+    titleText.anchor.set(0.5);
+    app.stage.addChild(titleText);
+
+    const subtitleText = new PIXI.Text("— 校园爱情故事 · Demo —", {
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 18, fill: 0xffffff, alpha: 0.6,
+    });
+    subtitleText.anchor.set(0.5);
+    app.stage.addChild(subtitleText);
+
+    const startHint = new PIXI.Text("👆 点击画面开始", {
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 20, fill: 0xffffff, alpha: 0.8,
+    });
+    startHint.anchor.set(0.5);
+    app.stage.addChild(startHint);
+
+    /* ---- 3. 绘制函数 ---- */
+
+    function drawBackground(color) {
+      bgGraphics.clear();
+      bgGraphics.beginFill(color);
+      bgGraphics.drawRect(0, 0, app.screen.width, app.screen.height);
+      bgGraphics.endFill();
+      // 加点颗粒感（细微纹理）
+      bgGraphics.beginFill(0x000000, 0.03);
+      for (let i = 0; i < 120; i++) {
+        const x = Math.random() * app.screen.width;
+        const y = Math.random() * app.screen.height;
+        bgGraphics.drawCircle(x, y, Math.random() * 2 + 0.5);
+      }
+      bgGraphics.endFill();
+    }
+
+    function drawDialogueBox() {
+      const W = app.screen.width;
+      const H = app.screen.height;
+      const boxH = 180;
+      const boxY = H - boxH;
+      const nameW = 160;
+      const nameH = 38;
+      const nameX = 60;
+      const nameY = boxY - nameH;
+
+      // 对话框
+      dialogueBg.clear();
+      dialogueBg.beginFill(0x000000, 0.88);
+      dialogueBg.drawRoundedRect(0, boxY, W, boxH + 8, 0);
+      dialogueBg.endFill();
+      dialogueBg.beginFill(0xffffff, 0.04);
+      dialogueBg.drawRect(0, boxY, W, 1);
+      dialogueBg.endFill();
+
+      // 名字标签
+      nameTagBg.clear();
+      nameTagBg.beginFill(0x1e3a5f);
+      nameTagBg.drawRoundedRect(nameX - 20, nameY, nameW, nameH, 10);
+      nameTagBg.endFill();
+      // 底部不圆角
+      nameTagBg.beginFill(0x1e3a5f);
+      nameTagBg.drawRect(nameX - 20, nameY + nameH - 10, nameW, 10);
+      nameTagBg.endFill();
+
+      // 名字位置
+      nameText.x = nameX;
+      nameText.y = nameY + 8;
+
+      // 对话文字位置
+      dialogueText.x = 60;
+      dialogueText.y = boxY + 50;
+      dialogueText.style.wordWrapWidth = W - 120;
+
+      // 点击提示位置
+      clickHint.x = W - 40;
+      clickHint.y = boxY + boxH - 40;
+    }
+
+    function drawCharacterSprite(position, visible) {
+      charContainer.removeChildren();
+      if (!visible) return;
+
+      const W = app.screen.width;
+      const H = app.screen.height;
+      const boxH = 180;
+
+      const g = new PIXI.Graphics();
+      const w = 120;
+      const h = 260;
+      let x;
+      if (position === "left") x = W * 0.12;
+      else if (position === "right") x = W * 0.72;
+      else x = W / 2 - w / 2;
+
+      const y = H - boxH - h;
+
+      // 身体
+      g.beginFill(0x3a5f8a);
+      g.drawRoundedRect(x, y + 55, w, h - 55, 0);
+      g.endFill();
+      // 头
+      g.beginFill(0xe8c9a0);
+      g.drawEllipse(x + w/2, y + 30, 35, 40);
+      g.endFill();
+      // 头发
+      g.beginFill(0x2c1810);
+      g.drawEllipse(x + w/2, y + 18, 38, 28);
+      g.endFill();
+
+      charContainer.addChild(g);
+    }
+
+    function drawChoiceButton(text, index, total) {
+      const W = app.screen.width;
+      const H = app.screen.height;
+      const boxH = 180;
+
+      const btnW = Math.min(500, W * 0.7);
+      const btnH = 52;
+      const gap = 14;
+      const totalH = total * btnH + (total - 1) * gap;
+      const startY = H - boxH - totalH - 30;
+      const y = startY + index * (btnH + gap);
+      const x = W / 2 - btnW / 2;
+
+      const container = new PIXI.Container();
+
+      // 按钮背景
+      const bg = new PIXI.Graphics();
+      bg.beginFill(0x142846, 0.92);
+      bg.drawRoundedRect(0, 0, btnW, btnH, 8);
+      bg.endFill();
+      bg.lineStyle(1, 0xffffff, 0.15);
+      bg.drawRoundedRect(0, 0, btnW, btnH, 8);
+
+      // 文字
+      const txt = new PIXI.Text(text, {
+        fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+        fontSize: 17, fill: 0xffffff,
+        wordWrap: true, wordWrapWidth: btnW - 40,
+      });
+      txt.anchor.set(0.5);
+      txt.x = btnW / 2;
+      txt.y = btnH / 2;
+
+      container.addChild(bg);
+      container.addChild(txt);
+      container.x = x;
+      container.y = y;
+      container.alpha = 0;
+
+      // 交互
+      container.eventMode = "static";
+      container.cursor = "pointer";
+      container.on("pointerover", () => {
+        bg.tint = 0xe94560;
+        container.scale.set(1.03);
+      });
+      container.on("pointerout", () => {
+        bg.tint = 0xffffff;
+        container.scale.set(1.0);
+      });
+
+      return container;
+    }
+
+    /* ---- 4. 打字机效果 ---- */
+    let typingTimer = null;
+
+    function typewriter(text, onDone) {
+      isTyping = true;
+      dialogueText.text = "";
+      clickHint.alpha = 0;
+      const chars = [...text];
+      let i = 0;
+      clearInterval(typingTimer);
+      typingTimer = setInterval(() => {
+        dialogueText.text += chars[i];
+        i++;
+        if (i >= chars.length) {
+          clearInterval(typingTimer);
+          isTyping = false;
+          clickHint.alpha = 0.6;
+          if (onDone) onDone();
+        }
+      }, 45);
+    }
+
+    function skipTypewriter(scene) {
+      clearInterval(typingTimer);
+      isTyping = false;
+      dialogueText.text = scene.lines[currentLineIndex].text;
+      clickHint.alpha = 0.6;
+    }
+
+    /* ---- 5. 场景加载 ---- */
+    function loadScene(id) {
+      currentScene = id;
+      currentLineIndex = 0;
+      const scene = scenes[id];
+      drawBackground(scene.bg);
+      drawDialogueBox();
+      choicesContainer.removeChildren();
+      showLine();
+    }
+
+    function showLine() {
+      const scene = scenes[currentScene];
+      if (currentLineIndex >= scene.lines.length) {
+        // 对话结束
+        if (scene.choices && scene.choices.length > 0) {
+          showChoices(scene.choices);
+        } else if (scene.next) {
+          loadScene(scene.next);
+        } else {
+          // 返回标题
+          showTitle();
+        }
+        return;
+      }
+
+      const line = scene.lines[currentLineIndex];
+      nameText.text = line.speaker;
+      nameText.visible = true;
+      drawCharacterSprite(line.sprite || null, !!line.sprite);
+      typewriter(line.text);
+    }
+
+    function showChoices(choices) {
+      choicesContainer.removeChildren();
+      choices.forEach((c, i) => {
+        const btn = drawChoiceButton(c.text, i, choices.length);
+        btn.on("pointerdown", () => {
+          choicesContainer.removeChildren();
+          loadScene(c.next);
+        });
+        choicesContainer.addChild(btn);
+        // 依次弹出动画
+        setTimeout(() => {
+          btn.alpha = 1;
+        }, i * 100 + 200);
+      });
+    }
+
+    /* ---- 6. 标题画面 ---- */
+    function showTitle() {
+      gameStarted = false;
+      currentScene = "start";
+      currentLineIndex = 0;
+      bgGraphics.clear();
+      bgGraphics.beginFill(0x0a0a1a);
+      bgGraphics.drawRect(0, 0, app.screen.width, app.screen.height);
+      bgGraphics.endFill();
+      dialogueBg.clear();
+      nameTagBg.clear();
+      nameText.visible = false;
+      dialogueText.text = "";
+      clickHint.alpha = 0;
+      choicesContainer.removeChildren();
+      charContainer.removeChildren();
+
+      titleText.visible = true;
+      subtitleText.visible = true;
+      startHint.visible = true;
+      updateTitlePositions();
+    }
+
+    function updateTitlePositions() {
+      titleText.x = app.screen.width / 2;
+      titleText.y = app.screen.height / 2 - 60;
+      subtitleText.x = app.screen.width / 2;
+      subtitleText.y = app.screen.height / 2;
+      startHint.x = app.screen.width / 2;
+      startHint.y = app.screen.height / 2 + 80;
+    }
+
+    /* ---- 7. 事件 ---- */
+    app.view.addEventListener("click", () => {
+      if (!gameStarted) {
+        // 开始游戏
+        gameStarted = true;
+        titleText.visible = false;
+        subtitleText.visible = false;
+        startHint.visible = false;
+        drawDialogueBox();
+        loadScene("start");
+        return;
+      }
+
+      if (isTyping) {
+        skipTypewriter(scenes[currentScene]);
+        return;
+      }
+
+      // 有选项时不推进对话
+      if (choicesContainer.children.length > 0) return;
+
+      currentLineIndex++;
+      showLine();
+    });
+
+    // 键盘空格
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        app.view.dispatchEvent(new Event("click"));
+      }
+    });
+
+    // 窗口大小变化
+    window.addEventListener("resize", () => {
+      const scene = scenes[currentScene];
+      if (scene) drawBackground(scene.bg);
+      drawDialogueBox();
+      if (currentLineIndex < (scene?.lines || []).length) {
+        drawCharacterSprite(
+          scene.lines[currentLineIndex]?.sprite || null,
+          !!scene.lines[currentLineIndex]?.sprite
+        );
+      }
+      updateTitlePositions();
+    });
+
+    /* ---- 8. 启动 ---- */
+    updateTitlePositions();
+    showTitle();
+
+    console.log("🎮 PixiJS Galgame Demo 已就绪！");
+    console.log("   点击画面开始 → 点击推进对话 → 点击选项分支");
+    console.log("   🏳️‍🌈 我与克俊华的校园爱情故事");
+  })();
+  </script>
+</body>
+</html>
