@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>我与克俊华的校园爱情故事</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <script src="pixi.min.js"></script>
+  <script>
+  try {
+  // ================================================================
+  //  引擎常量 & 状态机
+  // ================================================================
+  const STATE = { TITLE: "title", PLAYING: "playing", SAVE: "save", LOAD: "load", SETTINGS: "settings" };
+  let screen = STATE.TITLE;
+  let W, H;
+
+  const app = new PIXI.Application({
+    width: window.innerWidth, height: window.innerHeight,
+    backgroundColor: 0x0a0612, antialias: true,
+    resolution: Math.min(window.devicePixelRatio || 1, 2), autoDensity: true,
+  });
+  document.body.appendChild(app.view);
+
+  // 图层
+  const stage = app.stage;
+  const bgLayer = new PIXI.Container();
+  const uiLayer  = new PIXI.Container();
+  const fgLayer  = new PIXI.Container(); // 遮罩/弹窗
+  stage.addChild(bgLayer);
+  stage.addChild(uiLayer);
+  stage.addChild(fgLayer);
+
+  // ================================================================
+  //  数据：故事 + 存档
+  // ================================================================
+  const story = {
+    start: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"你睁开眼，面前是完全陌生的世界。" },
+        { who:"旁白", txt:"一个声音在脑海中响起——" },
+        { who:"系统", txt:"欢迎来到异世界。" },
+        { who:"系统", txt:"想回去吗？让克俊华爱上你。" },
+        { who:"系统", txt:"失败则永远困在这里。" },
+        { who:"gg—gay",  txt:"……等等，克俊华？男的？？", spr:"left" },
+        { who:"gg—gay",  txt:"我铁直男，搞什么啊！", spr:"left" },
+        { who:"系统", txt:"条件不可更改，祝你好运。" },
+        { who:"gg—gay",  txt:"这系统绝对有毒。", spr:"left" },
+        { who:"旁白", txt:"来不及多想，眼前是体育馆。" },
+        { who:"旁白", txt:"阳光穿过梧桐叶洒落下来。" },
+        { who:"旁白", txt:"今天全校体测，排满了人。" },
+        { who:"旁白", txt:"你攥着体测表刷着手机。" },
+        { who:"旁白", txt:"忽然注意到角落有个男生。" },
+        { who:"旁白", txt:"他蹲在电脑前，眉头微皱。" },
+        { who:"旁白", txt:"手指飞快敲着键盘。" },
+        { who:"旁白", txt:"旁边挂着「志愿者」的牌子。" },
+        { who:"gg—gay",  txt:"（心想）就是他？", spr:"left" },
+        { who:"gg—gay",  txt:"行吧，长得不算丑。", spr:"left" },
+        { who:"gg—gay",  txt:"但这和我是直男不冲突。", spr:"left" },
+        { who:"旁白", txt:"他抬起头，对上你的目光。" },
+        { who:"???",  txt:"同学，你也来体测吗？", spr:"right" },
+      ],
+      choices: [
+        { txt:"「对！你在调试系统吗？」凑过去", next:"meet_friendly" },
+        { txt:"「嗯……是的。」移开目光", next:"meet_shy" },
+      ]
+    },
+    meet_friendly: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"克俊华", txt:"这破系统老崩，我在打补丁。", spr:"right" },
+        { who:"克俊华", txt:"我叫克俊华，大二计算机系。", spr:"right" },
+        { who:"克俊华", txt:"今天来当志愿者的。", spr:"right" },
+        { who:"克俊华", txt:"你排队时在看什么？", spr:"right" },
+        { who:"克俊华", txt:"手机都快贴脸上了哈哈哈。", spr:"right" },
+        { who:"gg—gay",   txt:"没、没什么……刷朋友圈而已。", spr:"left" },
+        { who:"gg—gay",   txt:"（这人笑起来居然有酒窝）", spr:"left" },
+        { who:"gg—gay",   txt:"（……撤回，当我没想）", spr:"left" },
+        { who:"克俊华", txt:"新生吧？别紧张，体测很简单的。", spr:"right" },
+        { who:"克俊华", txt:"测完来社团摊位看看呗？", spr:"right" },
+        { who:"gg—gay",   txt:"好啊！正好没想好加什么社团。", spr:"left" },
+      ],
+      next: "ceremony"
+    },
+    meet_shy: {
+      bg: 0x0a1a2e,
+      lines: [
+        { who:"克俊华", txt:"不用紧张！我叫克俊华。", spr:"right" },
+        { who:"克俊华", txt:"大二计算机的，今天志愿者。", spr:"right" },
+        { who:"克俊华", txt:"这系统太烂，修了一上午了。", spr:"right" },
+        { who:"克俊华", txt:"新生第一天就赶上体测……", spr:"right" },
+        { who:"克俊华", txt:"你这运气也是没谁了。", spr:"right" },
+        { who:"gg—gay",   txt:"嗯……确实有点懵。", spr:"left" },
+        { who:"gg—gay",   txt:"这人还挺会关心人的。", spr:"left" },
+        { who:"gg—gay",   txt:"等等，这算加分项吗？", spr:"left" },
+        { who:"gg—gay",   txt:"不算，我是直男，铁的那种。", spr:"left" },
+        { who:"克俊华", txt:"嘴还挺甜嘛。测完别急着走。", spr:"right" },
+        { who:"克俊华", txt:"等会儿带你逛逛社团摊位。", spr:"right" },
+        { who:"gg—gay",   txt:"好，谢谢你，学长。", spr:"left" },
+      ],
+      next: "ceremony"
+    },
+    ceremony: {
+      bg: 0x0f0f2e,
+      lines: [
+        { who:"旁白", txt:"体测完来到礼堂，坐满了新生。" },
+        { who:"校长", txt:"欢迎同学们加入大家庭！", spr:"center" },
+        { who:"旁白", txt:"台下掌声雷动，克俊华凑近你耳边。" },
+        { who:"克俊华", txt:"（小声）想参加什么社团？", spr:"right" },
+      ],
+      choices: [
+        { txt:"「数学社！我喜欢数学。」", next:"math" },
+        { txt:"「文艺社，我喜欢读书。」", next:"lit" },
+        { txt:"「还没想好，先看看。」", next:"undecided" },
+      ]
+    },
+    math: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"克俊华", txt:"数学社！那你以后是学霸啊。", spr:"right" },
+        { who:"克俊华", txt:"能找你单独补习吗？", spr:"right" },
+        { who:"gg—gay",   txt:"当、当然可以！", spr:"left" },
+        { who:"克俊华", txt:"太好了！明天社团见！", spr:"right" },
+        { who:"旁白", txt:"你加入了数学社。新世界的第一天。" },
+      ],
+      next: "chapter2_math"
+    },
+    lit: {
+      bg: 0x0a1a2e,
+      lines: [
+        { who:"克俊华", txt:"我也是文艺社的！！太巧了吧！", spr:"right" },
+        { who:"克俊华", txt:"以后一起读书写作，想想就开心。", spr:"right" },
+        { who:"gg—gay",   txt:"（忍不住笑了）太好了。", spr:"left" },
+        { who:"旁白", txt:"你们聊了一路的书和故事。" },
+      ],
+      next: "chapter1_end"
+    },
+    undecided: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"克俊华", txt:"第一天嘛，不用急，有的是时间。", spr:"right" },
+        { who:"克俊华", txt:"走，我带你逛逛校园吧。", spr:"right" },
+        { who:"gg—gay",   txt:"好啊，那就麻烦学长了！", spr:"left" },
+        { who:"旁白", txt:"夕阳把他的侧脸照得很好看。" },
+      ],
+      next: "chapter1_end"
+    },
+    chapter1_end: {
+      bg: 0x0a0612,
+      lines: [
+        { who:"旁白", txt:"就这样，异世界的第一天结束了。" },
+        { who:"gg—gay",  txt:"纯属任务需要，都是为了回家。", spr:"left" },
+        { who:"gg—gay",  txt:"……仅此而已。大概吧。", spr:"left" },
+        { who:"系统", txt:"攻略进度：1%，请继续努力。" },
+        { who:"旁白", txt:"" },
+        { who:"旁白", txt:"第一章 · 未完待续 🏳️‍🌈" },
+      ],
+      next: null
+    },
+
+    // ═══════════════════════════════════
+    //  第二章：数学社
+    // ═══════════════════════════════════
+    chapter2_math: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"第二天，数学社活动室。" },
+        { who:"旁白", txt:"老师在黑板上推导公式。" },
+        { who:"旁白", txt:"你发现克俊华坐在角落。" },
+        { who:"旁白", txt:"他低着头，盯着桌下。" },
+        { who:"旁白", txt:"手机屏幕上是——galgame。" },
+        { who:"gg—gay",  txt:"（这家伙上课打galgame？！）", spr:"left" },
+        { who:"旁白", txt:"下课铃响了。" },
+        { who:"旁白", txt:"你凑过去，他慌忙切屏。" },
+        { who:"旁白", txt:"屏幕一闪——是鸣潮。" },
+        { who:"gg—gay",  txt:"原来你也玩鸣潮！", spr:"left" },
+        { who:"克俊华", txt:"！！吓我一跳。", spr:"right" },
+        { who:"克俊华", txt:"你也玩？加个好友？", spr:"right" },
+        { who:"旁白", txt:"他正用角色砍周本boss。" },
+        { who:"旁白", txt:"砍了十分钟，boss还剩半血。" },
+        { who:"旁白", txt:"他抬起头，泪眼蒙眬。" },
+        { who:"克俊华", txt:"求你了……帮我打周本吧。", spr:"right" },
+        { who:"克俊华", txt:"我打了一个小时了都……", spr:"right" },
+        { who:"旁白", txt:"他眼眶微红，可怜巴巴。" },
+        { who:"旁白", txt:"睫毛上还挂着一点点泪珠。" },
+        { who:"旁白", txt:"你接过手机——" },
+        { who:"旁白", txt:"周本boss战，开始了。" },
+      ],
+      next: "minigame"
+    },
+
+    // 小游戏
+    minigame: {
+      bg: 0x0a0a1a,
+      lines: [
+        { who:"旁白", txt:"【Boss战小游戏】" },
+        { who:"旁白", txt:"按空格键躲避boss攻击！" },
+        { who:"旁白", txt:"坚持越久分数越高……" },
+        { who:"旁白", txt:"准备好就按空格开始！" },
+      ],
+      next: "minigame_start"
+    },
+    minigame_start: {
+      bg: 0x0a0a1a,
+      lines: [
+        { who:"旁白", txt:"加载中……" },
+      ],
+      next: null // 由小游戏引擎接管
+    },
+    minigame_win: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"完美操作！boss应声倒地。" },
+        { who:"克俊华", txt:"你太强了吧！！", spr:"right" },
+        { who:"克俊华", txt:"我怎么练都打不过去……", spr:"right" },
+        { who:"克俊华", txt:"你简直是鸣潮之神！", spr:"right" },
+        { who:"gg—gay",  txt:"哈哈，多练练就好了。", spr:"left" },
+        { who:"旁白", txt:"他眼睛亮晶晶地看着你。" },
+        { who:"旁白", txt:"像一只被投喂了的小狗。" },
+        { who:"旁白", txt:"好感度+1 ⬆" },
+      ],
+      next: "chapter2_end"
+    },
+    minigame_lose: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"抱歉……你也倒在了boss面前。" },
+        { who:"克俊华", txt:"哈哈哈哈哈哈哈！！", spr:"right" },
+        { who:"克俊华", txt:"原来你也不行啊！", spr:"right" },
+        { who:"克俊华", txt:"太好了，我不是一个人菜！", spr:"right" },
+        { who:"gg—gay",  txt:"……你笑得太开心了吧。", spr:"left" },
+        { who:"旁白", txt:"虽然打输了，但他笑得特别灿烂。" },
+        { who:"旁白", txt:"好感度-2 ⬇" },
+      ],
+      next: "chapter2_end"
+    },
+    chapter2_end: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"游戏打完了，该回神了。" },
+        { who:"旁白", txt:"窗外梧桐叶被风吹得沙沙响。" },
+        { who:"旁白", txt:"午后的阳光透过玻璃窗。" },
+        { who:"旁白", txt:"在他头发上镀了一层金色。" },
+        { who:"旁白", txt:"他低着头，耳尖还红着。" },
+        { who:"旁白", txt:"修长的手指握着笔，发呆。" },
+        { who:"旁白", txt:"偶尔偷偷瞥你一眼。" },
+        { who:"旁白", txt:"对上目光又飞快转回去。" },
+      ],
+      next: "chapter3_bus"
+    },
+
+    // ═══════════════════════════════════
+    //  第三章：公交
+    // ═══════════════════════════════════
+    chapter3_bus: {
+      bg: 0x1a0a2e,
+      lines: [
+        { who:"旁白", txt:"放学了，夕阳染红半边天。" },
+        { who:"旁白", txt:"你在校门口碰到克俊华。" },
+        { who:"克俊华", txt:"诶，你也坐这趟公交？", spr:"right" },
+        { who:"gg—gay",  txt:"嗯，一起等吧。", spr:"left" },
+        { who:"旁白", txt:"你掏出一包刚买的薯片。" },
+        { who:"gg—gay",  txt:"吃吗？新出的口味。", spr:"left" },
+        { who:"克俊华", txt:"好耶！我最喜欢这个牌子。", spr:"right" },
+        { who:"旁白", txt:"两个人分着薯片等公交。" },
+        { who:"旁白", txt:"车来了，你们并排坐下。" },
+        { who:"旁白", txt:"公交车晃晃悠悠地开动。" },
+        { who:"旁白", txt:"黄昏的光从车窗洒进来。" },
+        { who:"旁白", txt:"你注意到他的侧脸——" },
+        { who:"旁白", txt:"线条柔和，睫毛轻轻颤动。" },
+        { who:"旁白", txt:"嘴唇因为薯片辣得微微泛红。" },
+        { who:"gg—gay",  txt:"（……好好看。）", spr:"left" },
+        { who:"gg—gay",  txt:"（不对我在想什么。）", spr:"left" },
+        { who:"gg—gay",  txt:"对了，你为什么喜欢鸣潮？", spr:"left" },
+        { who:"克俊华", txt:"嗯……因为很自由吧。", spr:"right" },
+        { who:"克俊华", txt:"我从小数学就特别好。", spr:"right" },
+        { who:"克俊华", txt:"好到别的小朋友不跟我玩。", spr:"right" },
+        { who:"克俊华", txt:"他们说，和我一起太无聊了。" },
+        { who:"克俊华", txt:"所以我没有朋友，很久了。" },
+        { who:"克俊华", txt:"二次元……至少不会嫌弃我。" },
+        { who:"克俊华", txt:"游戏里的角色永远会回应你。" },
+        { who:"克俊华", txt:"（轻声）但今天遇到了你。" },
+        { who:"克俊华", txt:"你是第一个……" },
+        { who:"克俊华", txt:"愿意和我一起玩的人。" },
+        { who:"克俊华", txt:"谢谢你，真的。", spr:"right" },
+        { who:"旁白", txt:"黄昏的光落在他眼睛里。" },
+        { who:"旁白", txt:"公交车颠簸了一下。" },
+        { who:"旁白", txt:"他的肩膀轻轻靠在你的臂上。" },
+        { who:"旁白", txt:"他红了脸，微微侧开。" },
+        { who:"旁白", txt:"但过了一会儿，又靠了回来。" },
+        { who:"旁白", txt:"假装在看窗外的风景。" },
+        { who:"旁白", txt:"夕阳把两个人的影子拉得很长。" },
+        { who:"旁白", txt:"车厢里只有引擎和心跳声。" },
+        { who:"旁白", txt:"你们的目光终于相遇。" },
+        { who:"旁白", txt:"他脸颊绯红，睫毛低垂。" },
+        { who:"旁白", txt:"嘴唇动了动，什么都没说出口。" },
+        { who:"旁白", txt:"……车到站了。" },
+        { who:"克俊华", txt:"我、我到了！明天见！", spr:"right" },
+        { who:"旁白", txt:"他几乎是跳下车的。" },
+        { who:"旁白", txt:"你透过车窗看他的背影。" },
+        { who:"旁白", txt:"他走了几步，忽然停下来。" },
+        { who:"旁白", txt:"双手捂住通红的脸。" },
+        { who:"旁白", txt:"在原地站了很久很久。" },
+        { who:"旁白", txt:"夕阳把他的影子拉得很长。" },
+        { who:"旁白", txt:"你忽然觉得——" },
+        { who:"旁白", txt:"这个异世界，好像也不坏。" },
+        { who:"旁白", txt:"" },
+        { who:"系统", txt:"好感度已更新。请继续攻略。" },
+        { who:"旁白", txt:"" },
+        { who:"旁白", txt:"第二章 · 未完待续 🏳️‍🌈" },
+      ],
+      next: null
+    }
+  };
+
+  let curScene = "start";
+  let curLine  = 0;
+  let isTyping = false;
+  let typeTimer = null;
+  let gameTime = 0;
+  let gameTimer = null;
+  let affection = 3; // 好感度 ✨ 初始3颗星
+
+  // 存档
+  const SAVE_KEY = "galgame_saves";
+  function loadSaves() {
+    try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || []; }
+    catch(e) { return []; }
+  }
+  function writeSaves(arr) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(arr)); }
+    catch(e) { console.warn("存档写入失败"); }
+  }
+
+  // 设置
+  let settings = { textSpeed: 45, bgmVol: 80, sfxVol: 100 };
+
+  // ================================================================
+  //  绘制工具
+  // ================================================================
+  function roundRect(g, x, y, w, h, r) {
+    g.drawRoundedRect(x, y, w, h, r);
+  }
+
+  function dimScreen(alpha = 0.7) {
+    const g = new PIXI.Graphics();
+    g.beginFill(0x000000, alpha);
+    g.drawRect(0, 0, W, H);
+    g.endFill();
+    return g;
+  }
+
+  function makeText(str, opts = {}) {
+    return new PIXI.Text(str, Object.assign({
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      fontSize: 16, fill: 0xffffff,
+    }, opts));
+  }
+
+  function makeBtn(label, w = 200, h = 46, accent = 0xe94560) {
+    const c = new PIXI.Container();
+    const bg = new PIXI.Graphics();
+    bg.beginFill(accent, 0.85);
+    bg.drawRoundedRect(0, 0, w, h, h / 2);
+    bg.endFill();
+    c.addChild(bg);
+    const t = makeText(label, { fontSize: 17, fontWeight: "bold", letterSpacing: 3 });
+    t.anchor.set(0.5); t.x = w / 2; t.y = h / 2;
+    c.addChild(t);
+    c.eventMode = "static"; c.cursor = "pointer";
+    c.on("pointerover", () => { bg.tint = 0xff7799; c.scale.set(1.04); });
+    c.on("pointerout",  () => { bg.tint = 0xffffff; c.scale.set(1); });
+    return c;
+  }
+
+  // ================================================================
+  //  背景绘制（渐变+星星）
+  // ================================================================
+  function drawSkyBg(color = 0x0f0820, withStars = true) {
+    const g = new PIXI.Graphics();
+    g.beginFill(color);
+    g.drawRect(0, 0, W, H);
+    g.endFill();
+    // 光晕
+    g.beginFill(0x3d1a4a, 0.15);
+    g.drawEllipse(W * 0.5, H * 0.45, W * 0.7, H * 0.55);
+    g.endFill();
+    g.beginFill(0x1a1050, 0.2);
+    g.drawRect(0, 0, W, H * 0.35);
+    g.endFill();
+    if (withStars) {
+      for (let i = 0; i < 80; i++) {
+        g.beginFill(0xffffff, Math.random() * 0.3 + 0.05);
+        g.drawCircle(Math.random() * W, Math.random() * H, Math.random() * 1.2 + 0.2);
+        g.endFill();
+      }
+    }
+    return g;
+  }
+
+  // ================================================================
+  //  标题画面
+  // ================================================================
+  function showTitle() {
+    screen = STATE.TITLE;
+    clearAll();
+    stopGameTimer();
+
+    // ---- 用你的设计图做背景 ----
+    const titleTex = PIXI.Texture.from("title-bg.png");
+    const bgSprite = new PIXI.Sprite(titleTex);
+    bgLayer.addChild(bgSprite);
+
+    // 缩放适配屏幕
+    function fitBg() {
+      const texW = titleTex.width || W;
+      const texH = titleTex.height || H;
+      const scale = Math.max(W / texW, H / texH);
+      bgSprite.scale.set(scale);
+      bgSprite.x = (W - texW * scale) / 2;
+      bgSprite.y = (H - texH * scale) / 2;
+    }
+    if (titleTex.baseTexture.valid) fitBg();
+    else titleTex.baseTexture.once("loaded", fitBg);
+
+    // ---- 透明热区（盖在设计图按钮上）----
+    // 根据设计图里按钮的位置来调 x, y, w, h
+    function hotZone(xPct, yPct, wPct, hPct, onClick) {
+      const zone = new PIXI.Container();
+      const bg = new PIXI.Graphics();
+      bg.beginFill(0xffffff, 0.01);
+      bg.drawRoundedRect(0, 0, W * wPct, H * hPct, 8);
+      bg.endFill();
+      zone.addChild(bg);
+      zone.x = W * xPct; zone.y = H * yPct;
+      // 用 hitArea 确保点击区域
+      zone.hitArea = new PIXI.Rectangle(0, 0, W * wPct, H * hPct);
+      zone.eventMode = "static";
+      zone.cursor = "pointer";
+      zone.on("pointertap", onClick);
+      zone.on("pointerdown", onClick);
+      return zone;
+    }
+
+    // 按钮热区（对准设计图）
+    uiLayer.addChild(hotZone(0.745, 0.395, 0.186, 0.052, () => startNewGame()));
+    if (loadSaves().length > 0) {
+      uiLayer.addChild(hotZone(0.745, 0.455, 0.186, 0.062, () => showLoadScreen()));
+    }
+    uiLayer.addChild(hotZone(0.740, 0.675, 0.196, 0.047, () => {}));
+    uiLayer.addChild(hotZone(0.740, 0.725, 0.196, 0.057, () => showSettings()));
+  }
+
+  // ================================================================
+  //  存档 / 读档画面
+  // ================================================================
+  function showSaveScreen() { showSlotScreen(STATE.SAVE); }
+  function showLoadScreen() { showSlotScreen(STATE.LOAD); }
+
+  function showSlotScreen(mode) {
+    screen = mode;
+    clearAll();
+    bgLayer.addChild(drawSkyBg(0x0a0612, false));
+    const dim = dimScreen(0.6);
+    bgLayer.addChild(dim);
+
+    const isSave = mode === STATE.SAVE;
+    const title = makeText(isSave ? "💾 保 存 游 戏" : "📂 读 取 存 档", {
+      fontSize: 28, fontWeight: "bold", fill: [0xffccdd, 0xff7799],
+      fillGradientType: 0, letterSpacing: 4,
+    });
+    title.anchor.set(0.5, 0); title.x = W / 2; title.y = H * 0.05;
+    uiLayer.addChild(title);
+
+    const saves = loadSaves();
+
+    // 3列 x 3行
+    const cols = 3, rows = 3;
+    const slotW = Math.min(220, (W - 80) / cols);
+    const slotH = Math.min(130, (H * 0.65) / rows);
+    const gapX = 20, gapY = 20;
+    const gridW = cols * slotW + (cols - 1) * gapX;
+    const gridH = rows * slotH + (rows - 1) * gapY;
+    const startX = (W - gridW) / 2;
+    const startY = title.y + title.height + 28;
+
+    for (let i = 0; i < 9; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = startX + col * (slotW + gapX);
+      const y = startY + row * (slotH + gapY);
+
+      const slot = new PIXI.Container();
+      const bg = new PIXI.Graphics();
+      bg.beginFill(0x14102a, 0.55);
+      bg.drawRoundedRect(0, 0, slotW, slotH, 10);
+      bg.endFill();
+      bg.lineStyle(1, 0x443355, 0.3);
+      bg.drawRoundedRect(0, 0, slotW, slotH, 10);
+      slot.addChild(bg);
+
+      // 编号
+      const num = makeText(String(i + 1).padStart(2, "0"), {
+        fontSize: 32, fontWeight: "bold", fill: 0x443355,
+      });
+      num.anchor.set(1, 0); num.x = slotW - 14; num.y = 6;
+      num.alpha = 0.45;
+      slot.addChild(num);
+
+      if (saves[i]) {
+        const s = saves[i];
+        slot.addChild(makeText(s.chapter || "???", { fontSize: 14, fontWeight: "bold" }));
+        slot.children[2].x = 14; slot.children[2].y = 14;
+        slot.addChild(makeText(s.date || "", { fontSize: 11, fill: 0x776688 }));
+        slot.children[3].x = 14; slot.children[3].y = 36;
+        slot.addChild(makeText((s.playtime || "?") + " 分钟", { fontSize: 11, fill: 0x776688 }));
+        slot.children[4].x = 14; slot.children[4].y = 54;
+
+        // 缩略图占位
+        const thumb = new PIXI.Graphics();
+        thumb.beginFill(0x1a1035);
+        thumb.drawRoundedRect(0, 0, slotW - 24, slotH - 80, 4);
+        thumb.endFill();
+        thumb.x = 12; thumb.y = 72; thumb.alpha = 0.5;
+        slot.addChild(thumb);
+      } else {
+        slot.addChild(makeText("— 空 —", { fontSize: 13, fill: 0x443355 }));
+        slot.children[2].anchor.set(0.5);
+        slot.children[2].x = slotW / 2; slot.children[2].y = slotH / 2;
+      }
+
+      slot.eventMode = "static";
+      slot.cursor = "pointer";
+      slot.on("pointerover", () => { bg.tint = 0x2a1a4a; });
+      slot.on("pointerout",  () => { bg.tint = 0xffffff; });
+      const idx = i;
+      slot.on("pointertap", () => {
+        if (isSave) {
+          doSave(idx);
+          showSlotScreen(mode); // 刷新
+        } else if (saves[idx]) {
+          doLoad(idx);
+        }
+      });
+      slot.x = x; slot.y = y;
+      uiLayer.addChild(slot);
+    }
+
+    // 返回按钮
+    const backBtn = makeBtn("←  返  回", 160, 42, 0x443355);
+    backBtn.x = (W - 160) / 2;
+    backBtn.y = startY + gridH + 18;
+    backBtn.on("pointertap", () => {
+      if (gameTimer) showTitle(); // 从标题进来
+      else showTitle();
+    });
+    uiLayer.addChild(backBtn);
+  }
+
+  function doSave(slotIdx) {
+    const saves = loadSaves();
+    const scene = story[curScene];
+    const chapterName = scene.lines.length > 0 ? scene.lines[0].txt.substring(0, 12) : "???";
+    saves[slotIdx] = {
+      sceneId: curScene,
+      lineIdx: curLine,
+      chapter: chapterName,
+      date: new Date().toLocaleString("zh-CN"),
+      playtime: Math.floor(gameTime / 60),
+    };
+    writeSaves(saves);
+    console.log("💾 存档 " + (slotIdx + 1) + " 完成");
+  }
+
+  function doLoad(slotIdx) {
+    const saves = loadSaves();
+    const s = saves[slotIdx];
+    if (!s || !story[s.sceneId]) return;
+    curScene = s.sceneId;
+    curLine = Math.min(s.lineIdx, (story[s.sceneId].lines || []).length - 1);
+    gameTime = (s.playtime || 0) * 60;
+    showGameScreen();
+  }
+
+  function quickSave() {
+    const saves = loadSaves();
+    // 自动保存到第一个槽
+    const scene = story[curScene];
+    saves[0] = {
+      sceneId: curScene, lineIdx: curLine,
+      chapter: scene.lines[0]?.txt?.substring(0, 12) || "自动存档",
+      date: new Date().toLocaleString("zh-CN"),
+      playtime: Math.floor(gameTime / 60),
+    };
+    writeSaves(saves);
+  }
+
+  // ================================================================
+  //  设置画面
+  // ================================================================
+  function showSettings() {
+    screen = STATE.SETTINGS;
+    clearAll();
+    bgLayer.addChild(drawSkyBg(0x0a0612, false));
+    bgLayer.addChild(dimScreen(0.6));
+
+    const title = makeText("⚙️ 设    置", {
+      fontSize: 28, fontWeight: "bold", fill: [0xffccdd, 0xff7799],
+      fillGradientType: 0, letterSpacing: 4,
+    });
+    title.anchor.set(0.5, 0); title.x = W / 2; title.y = H * 0.08;
+    uiLayer.addChild(title);
+
+    const items = [
+      { label: "文字速度", key: "textSpeed", min: 10, max: 100, step: 5, unit: "ms/字" },
+      { label: "背景音乐", key: "bgmVol",  min: 0,  max: 100, step: 10, unit: "%" },
+      { label: "音效音量", key: "sfxVol",  min: 0,  max: 100, step: 10, unit: "%" },
+    ];
+
+    const startY = title.y + title.height + 40;
+    items.forEach((item, i) => {
+      const y = startY + i * 90;
+      const label = makeText(item.label, { fontSize: 17, fontWeight: "bold" });
+      label.x = W / 2 - 260; label.y = y;
+      uiLayer.addChild(label);
+
+      // 简化滑块：用按钮 +/-
+      const valTxt = makeText(String(settings[item.key]) + " " + item.unit, {
+        fontSize: 15, fill: 0xbbaacc,
+      });
+      valTxt.anchor.set(0.5, 0); valTxt.x = W / 2 + 40; valTxt.y = y;
+      uiLayer.addChild(valTxt);
+
+      const minusBtn = makeBtn("−", 42, 36, 0x2a1a4a);
+      minusBtn.x = W / 2 + 130; minusBtn.y = y - 4;
+      minusBtn.on("pointertap", () => {
+        settings[item.key] = Math.max(item.min, settings[item.key] - item.step);
+        valTxt.text = String(settings[item.key]) + " " + item.unit;
+      });
+      uiLayer.addChild(minusBtn);
+
+      const plusBtn = makeBtn("+", 42, 36, 0x2a1a4a);
+      plusBtn.x = W / 2 + 180; plusBtn.y = y - 4;
+      plusBtn.on("pointertap", () => {
+        settings[item.key] = Math.min(item.max, settings[item.key] + item.step);
+        valTxt.text = String(settings[item.key]) + " " + item.unit;
+      });
+      uiLayer.addChild(plusBtn);
+
+      // 进度条背景
+      const barW = 250, barH = 6;
+      const barBg = new PIXI.Graphics();
+      barBg.beginFill(0x2a1a4a, 0.6);
+      barBg.drawRoundedRect(0, 0, barW, barH, 3);
+      barBg.endFill();
+      barBg.x = W / 2 - 260; barBg.y = y + 36;
+      uiLayer.addChild(barBg);
+
+      const barFill = new PIXI.Graphics();
+      const pct = (settings[item.key] - item.min) / (item.max - item.min);
+      barFill.beginFill(0xe94560, 0.7);
+      barFill.drawRoundedRect(0, 0, barW * pct, barH, 3);
+      barFill.endFill();
+      barFill.x = barBg.x; barFill.y = barBg.y;
+      barFill.name = "bar_" + item.key;
+      uiLayer.addChild(barFill);
+    });
+
+    const backBtn = makeBtn("←  返  回", 160, 42, 0x443355);
+    backBtn.x = (W - 160) / 2; backBtn.y = startY + 3 * 90 + 30;
+    backBtn.on("pointertap", () => showTitle());
+    uiLayer.addChild(backBtn);
+  }
+
+  // ================================================================
+  //  游戏画面
+  // ================================================================
+  function showGameScreen() {
+    screen = STATE.PLAYING;
+    clearAll();
+    startGameTimer();
+    renderGameScene();
+  }
+
+  // ============================================================
+  //  鸣潮周本小游戏（跳一跳风格）
+  // ============================================================
+  function launchMiniGame() {
+    screen = "minigame";
+    clearAll();
+    W = app.screen.width; H = app.screen.height;
+
+    // 背景
+    const gameBg = new PIXI.Graphics();
+    gameBg.beginFill(0x0a0a1a);
+    gameBg.drawRect(0, 0, W, H);
+    gameBg.endFill();
+    // 地面线
+    gameBg.lineStyle(2, 0x445566);
+    gameBg.moveTo(0, H - 80); gameBg.lineTo(W, H - 80);
+    bgLayer.addChild(gameBg);
+
+    // 玩家（小方块）
+    const player = new PIXI.Graphics();
+    player.beginFill(0xe94560);
+    player.drawRoundedRect(0, 0, 30, 30, 4);
+    player.endFill();
+    player.x = 80; player.y = H - 110;
+    bgLayer.addChild(player);
+
+    // 障碍物
+    const obstacle = new PIXI.Graphics();
+    obstacle.beginFill(0x667788);
+    obstacle.drawRoundedRect(0, 0, 20, 30, 4);
+    obstacle.endFill();
+    obstacle.x = W + 100; obstacle.y = H - 110;
+    bgLayer.addChild(obstacle);
+
+    // 分数
+    let score = 0;
+    const scoreText = makeText("分数：" + score, { fontSize: 22, fill: 0xffffff, fontWeight: "bold" });
+    scoreText.x = 20; scoreText.y = 20;
+    uiLayer.addChild(scoreText);
+
+    // 提示
+    const hint = makeText("点击屏幕跳跃！", { fontSize: 16, fill: 0x8899aa });
+    hint.anchor.set(0.5); hint.x = W/2; hint.y = H/2 - 50;
+    uiLayer.addChild(hint);
+
+    // 游戏状态
+    let jumping = false;
+    let vy = 0;
+    const groundY = H - 110;
+    let gameRunning = false;
+    let speed = 6;
+
+    // 点击开始/跳跃
+    function onClick() {
+      if (!gameRunning) { gameRunning = true; hint.visible = false; return; }
+      if (!jumping) { jumping = true; vy = -12; }
+    }
+    app.view.addEventListener("click", onClick);
+
+    // 游戏循环
+    const gameTicker = new PIXI.Ticker();
+    gameTicker.add(() => {
+      if (!gameRunning) return;
+
+      // 跳跃物理
+      if (jumping) {
+        player.y += vy;
+        vy += 0.7;
+        if (player.y >= groundY) {
+          player.y = groundY;
+          jumping = false;
+          vy = 0;
+        }
+      }
+
+      // 障碍物移动
+      obstacle.x -= speed;
+      if (obstacle.x < -30) {
+        obstacle.x = W + Math.random() * 200;
+        score++;
+        scoreText.text = "分数：" + score;
+        speed += 0.3;
+      }
+
+      // 碰撞检测
+      const px = player.x, py = player.y, pw = 30, ph = 30;
+      const ox = obstacle.x, oy = obstacle.y, ow = 20, oh = 30;
+      if (px < ox + ow && px + pw > ox && py < oy + oh && py + ph > oy) {
+        // 撞上了
+        gameRunning = false;
+        gameTicker.destroy();
+        app.view.removeEventListener("click", onClick);
+        if (score >= 8) {
+          affection = Math.min(5, affection + 1);
+          setTimeout(() => {
+            clearAll();
+            curScene = "minigame_win"; curLine = 0;
+            renderGameScene();
+          }, 500);
+        } else {
+          affection = Math.max(0, affection - 2);
+          setTimeout(() => {
+            clearAll();
+            curScene = "minigame_lose"; curLine = 0;
+            renderGameScene();
+          }, 500);
+        }
+      }
+    });
+    gameTicker.start();
+  }
+
+  function startNewGame() {
+    curScene = "start";
+    curLine = 0;
+    gameTime = 0;
+    showGameScreen();
+  }
+
+  function startGameTimer() {
+    stopGameTimer();
+    gameTimer = setInterval(() => { gameTime++; }, 1000);
+  }
+
+  function stopGameTimer() {
+    if (gameTimer) { clearInterval(gameTimer); gameTimer = null; }
+  }
+
+  function renderGameScene() {
+    clearAll();
+    const scene = story[curScene];
+    if (!scene) { showTitle(); return; }
+
+    W = app.screen.width; H = app.screen.height;
+
+    // ---- 背景（图片优先，纯色兜底）----
+    const bgImages = {
+      'assets/backgrounds/street.jpg': 'assets/backgrounds/street.jpg',
+    };
+    // 找到对应图片
+    let bgImgPath = null;
+    for (const key in bgImages) {
+      if (scene.bg === bgImages[key] || key.includes("street")) {
+        bgImgPath = key;
+      }
+    }
+    // 没在映射表里，就用默认
+    if (!bgImgPath) bgImgPath = 'assets/backgrounds/street.jpg';
+
+    const bgTex = PIXI.Texture.from(bgImgPath);
+    let bg;
+    if (bgTex.baseTexture.valid) {
+      bg = new PIXI.Sprite(bgTex);
+      // 按比例缩放填满屏幕
+      const s = 0.542; // 用户设定
+      bg.scale.set(s);
+      bg.x = -45;
+      bg.y = -551;
+
+      window._bgSprite = bg;
+    } else {
+      bg = new PIXI.Graphics();
+      bg.beginFill(scene.bg || 0x1a0a2e);
+      bg.drawRect(0, 0, W, H);
+      bg.endFill();
+    }
+    bgLayer.addChild(bg);
+
+    // 底部暗角
+    const vignette = new PIXI.Graphics();
+    for (let i = 0; i < 8; i++) {
+      vignette.beginFill(0x000000, 0.02 * (8 - i));
+      vignette.drawRect(0, H - 250 + i * 8, W, 8);
+      vignette.endFill();
+    }
+    bgLayer.addChild(vignette);
+
+    // 好感度显示（左上角）
+    const affText = makeText("❤️ ".repeat(affection), {
+      fontSize: 18, fill: 0xff7799,
+      fontFamily: "Microsoft YaHei, PingFang SC, sans-serif",
+      dropShadow: true, dropShadowColor: 0x000000,
+      dropShadowBlur: 4, dropShadowDistance: 1,
+    });
+    affText.x = 16; affText.y = 12;
+    uiLayer.addChild(affText);
+
+    // ---- 立绘 ----
+    if (curLine < scene.lines.length) {
+      const line = scene.lines[curLine];
+      if (line.spr) drawSprite(line.who, line.spr);
+    }
+
+    // ═══════════════════════════════════════
+    //  ADV 对话框 — 使用你的 texbox.png
+    // ═══════════════════════════════════════
+    const boxH = 185;
+    const boxY = H - boxH;
+    const mx = 14;
+
+    // 加载你的对话框图片
+    const boxTex = PIXI.Texture.from("assets/ui/dialogue-box.png");
+    let box;
+    if (boxTex.baseTexture.valid) {
+      // 用你的图
+      box = new PIXI.Sprite(boxTex);
+      box.x = mx; box.y = boxY;
+      box.width = W - mx*2;
+      box.height = boxH - mx;
+    } else {
+      // 图片加载失败时用代码画（兜底）
+      box = new PIXI.Graphics();
+      box.beginFill(0x000000, 0.35);
+      box.drawRoundedRect(mx+5, boxY+6, W-mx*2, boxH-mx, 20);
+      box.endFill();
+      box.beginFill(0x0e0a1a, 0.9);
+      box.drawRoundedRect(mx, boxY, W-mx*2, boxH-mx, 20);
+      box.endFill();
+    }
+    uiLayer.addChild(box);
+
+    // ---- 名字标签 ----
+    const currentLine = scene.lines[curLine];
+    const charColors = {
+      "gg—gay":   0x3a5fb5,
+      "克俊华": 0xd64560,
+      "系统":   0x00cc88,
+      "旁白":   0x4a5568,
+      "校长":   0x3d7050,
+      "???":   0x6b5b7a,
+    };
+    const charColor = charColors[currentLine.who] || 0x4a5568;
+    const nameW = Math.min(140, W * 0.14);
+    const nameH = 34;
+    const nameX = mx + 40;
+    const nameY = boxY - nameH + 5;
+
+    const nameBg = new PIXI.Graphics();
+    // 颜色块
+    nameBg.beginFill(charColor, 0.95);
+    nameBg.drawRoundedRect(nameX, nameY, nameW, nameH, 8);
+    nameBg.endFill();
+    // 顶边高光
+    nameBg.beginFill(0xffffff, 0.2);
+    nameBg.drawRoundedRect(nameX + 3, nameY + 2, nameW - 6, nameH/2 - 4, 6);
+    nameBg.endFill();
+    uiLayer.addChild(nameBg);
+
+    const nameTag = makeText(currentLine.who, {
+      fontSize: 17, fontWeight: "bold", fill: 0xffffff,
+      letterSpacing: 2,
+    });
+    nameTag.anchor.set(0.5);
+    nameTag.x = nameX + nameW/2;
+    nameTag.y = nameY + nameH/2;
+    uiLayer.addChild(nameTag);
+
+    // ---- 对话文字（可键盘调试）----
+    // 默认：水平居中
+    const textW = W - mx*2 - 52;
+    window._textW = textW;
+    window._fontSize = 31;
+    window._textX = 359;
+    window._textY = 717;
+    window._textCentered = false;
+
+    const dialogueTxt = makeText("", {
+      fontSize: window._fontSize, fill: 0xf5f0e8,
+      lineHeight: 36, wordWrap: true, wordWrapWidth: textW,
+      letterSpacing: 0.8, align: "left",
+    });
+    dialogueTxt.x = window._textX;
+    dialogueTxt.y = window._textY;
+    // 居中时重新算 X
+    if (window._textCentered && dialogueTxt.style.align === "center") {
+      dialogueTxt.x = mx + (W - mx*2 - textW) / 2;
+    }
+    uiLayer.addChild(dialogueTxt);
+
+    window._dialogueTxt = dialogueTxt;  // 暴露给调试
+
+    // ---- 闪烁三角 ----
+    const hint = new PIXI.Graphics();
+    hint.beginFill(0xcc8899, 0.55);
+    hint.moveTo(0, 0); hint.lineTo(10, 7); hint.lineTo(5, 7); hint.lineTo(5, 14); hint.lineTo(-5, 14); hint.lineTo(-5, 7); hint.lineTo(-10, 7); hint.closePath();
+    hint.endFill();
+    hint.x = W - mx - 32;
+    hint.y = boxY + boxH - mx - 22;
+    hint.name = "hint"; hint.alpha = 0;
+    uiLayer.addChild(hint);
+
+
+    // 打字机
+    typewriter(currentLine.txt, dialogueTxt, () => {
+      hint.alpha = 0.55;
+      const pulse = () => { hint.alpha = 0.25 + Math.sin(Date.now()*0.005)*0.3; };
+      app.ticker.add(pulse);
+      hint._pulse = pulse;
+    });
+
+    // 点击推进
+    box.eventMode = "static";
+    box.cursor = "pointer";
+    box.on("pointertap", () => advanceDialogue());
+  }
+
+  function drawSprite(who, pos) {
+    // 根据说话人找对应立绘图片（预先加载的纹理）
+    const charImages = {
+      "克俊华": 'assets/characters/kejunhua.png',
+      "???":    'assets/characters/kejunhua.png',
+    };
+    const imgPath = charImages[who];
+    const maxH = H - 190;
+
+    if (imgPath) {
+      const tex = PIXI.Texture.from(imgPath);
+      const sprite = new PIXI.Sprite(tex);
+      const doScale = () => {
+        if (tex.height > 0) {
+          const s = Math.min(maxH / tex.height, 0.9);
+          sprite.scale.set(s);
+        }
+      };
+      doScale();
+      tex.baseTexture.on("update", doScale);
+      sprite.anchor.set(0.5, 1);
+      if (pos === "left")  { sprite.x = 131; sprite.y = 690; }
+      else if (pos === "right") { sprite.x = 131; sprite.y = 690; }
+      else                 { sprite.x = W / 2; sprite.y = H - 185; }
+      sprite.scale.set(0.276);
+
+      window._charSprite = sprite;
+
+      uiLayer.addChild(sprite);
+      return;
+    }
+
+    // gg—gay 没立绘就不显示了
+  }
+
+  function typewriter(text, target, onDone) {
+    // Ctrl 按住直接显示全文
+    if (ctrlHeld) {
+      target.text = text;
+      isTyping = false;
+      if (onDone) onDone();
+      return;
+    }
+    isTyping = true;
+    target.text = "";
+    if (typeTimer) clearInterval(typeTimer);
+    const chars = [...text];
+    let i = 0;
+    typeTimer = setInterval(() => {
+      target.text += chars[i]; i++;
+      if (i >= chars.length) {
+        clearInterval(typeTimer);
+        typeTimer = null; isTyping = false;
+        if (onDone) onDone();
+      }
+    }, settings.textSpeed);
+  }
+
+  function skipTypewriter() {
+    if (!isTyping) return;
+    clearInterval(typeTimer); typeTimer = null; isTyping = false;
+    // 直接用 window._dialogueTxt 引用
+    if (window._dialogueTxt) {
+      const scene = story[curScene];
+      window._dialogueTxt.text = scene.lines[curLine].txt;
+    }
+    // 显示▼
+    for (const child of uiLayer.children) {
+      if (child.name === "hint") child.alpha = 0.5;
+    }
+  }
+
+  function clearAll() {
+    bgLayer.removeChildren();
+    uiLayer.removeChildren();
+    fgLayer.removeChildren();
+    if (typeTimer) { clearInterval(typeTimer); typeTimer = null; }
+    isTyping = false;
+  }
+
+  // ================================================================
+  //  对话推进
+  // ================================================================
+  function advanceDialogue() {
+    if (screen !== STATE.PLAYING) return;
+
+    if (isTyping) { skipTypewriter(); return; }
+
+    const scene = story[curScene];
+    curLine++;
+
+    if (curLine < scene.lines.length) {
+      renderGameScene();
+    } else if (scene.choices && scene.choices.length > 0) {
+      showChoices(scene.choices);
+    } else if (scene.next) {
+      curScene = scene.next; curLine = 0;
+      quickSave();
+      if (curScene === "minigame_start") launchMiniGame();
+      else renderGameScene();
+    } else {
+      // 完结 → 回标题
+      stopGameTimer();
+      setTimeout(() => showTitle(), 2500);
+    }
+  }
+
+  function showChoices(choices) {
+    const choiceLayer = new PIXI.Container();
+    fgLayer.addChild(choiceLayer);
+    choices.forEach((c, i) => {
+      const btn = makeBtn(c.txt, Math.min(500, W * 0.65), 52, 0x142846);
+      btn.x = (W - Math.min(500, W * 0.65)) / 2;
+      btn.y = H - 175 - (choices.length - i) * 64 - 20;
+      btn.alpha = 0;
+      btn.on("pointertap", () => {
+        fgLayer.removeChildren();
+        curScene = c.next; curLine = 0;
+        quickSave();
+        if (curScene === "minigame_start") launchMiniGame();
+        else renderGameScene();
+      });
+      choiceLayer.addChild(btn);
+      // 错开弹出
+      setTimeout(() => { btn.alpha = 1; }, i * 80 + 150);
+    });
+  }
+
+  // ================================================================
+  //  键盘 & 窗口
+  // ================================================================
+  let ctrlHeld = false;
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "ControlLeft" || e.code === "ControlRight") { ctrlHeld = true; return; }
+    if (e.code === "Space" || e.code === "Enter") {
+      e.preventDefault();
+      if (screen === STATE.PLAYING) advanceDialogue();
+    }
+    if (e.code === "Escape") {
+      if (screen === STATE.PLAYING) showTitle();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ControlLeft" || e.code === "ControlRight") ctrlHeld = false;
+  });
+
+  window.addEventListener("resize", () => {
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    W = app.screen.width; H = app.screen.height;
+    if (screen === STATE.TITLE) showTitle();
+    else if (screen === STATE.PLAYING) renderGameScene();
+  });
+
+  // ================================================================
+  //  启动
+  // ================================================================
+  // 启动
+  W = app.screen.width; H = app.screen.height;
+  showTitle();
+  console.log("🎮 测试版1 就绪！");
+  console.log("   操作：空格/点击推进对话 | Ctrl快进 | Esc回标题");
+  console.log("   存档：9个存档位 | 设置：文字速度/音量");
+  console.log("   🏳️‍🌈 我与克俊华的校园爱情故事");
+
+  } catch(e) { console.error("引擎启动失败:", e); }
+  </script>
+</body>
+</html>
